@@ -1,1 +1,328 @@
-{ % load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>지뢰찾기</title>
+
+<style>
+body{
+    text-align:center;
+    font-family:Arial;
+    background:#f0f0f0;
+}
+
+#board{
+    display:grid;
+    grid-template-columns:repeat(8,40px);
+    gap:2px;
+    justify-content:center;
+    margin:20px;
+}
+
+.cell{
+    width:40px;
+    height:40px;
+    background:#bbb;
+    border:1px solid #888;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    font-weight:bold;
+}
+
+.open{
+    background:white;
+}
+
+button{
+    padding:8px 15px;
+    margin:5px;
+}
+</style>
+</head>
+<body>
+
+<h1>💣 지뢰찾기</h1>
+
+<div id="timer">⏱ 0초</div>
+<div id="best">🏆 최고 기록: 없음</div>
+
+<button onclick="resetRecord()">기록 초기화</button>
+
+<div id="board"></div>
+
+<script>
+
+const ROWS = 8;
+const COLS = 8;
+const MINES = 10;
+
+let board = [];
+let gameOver = false;
+
+let timer = 0;
+let timerStarted = false;
+let interval;
+
+const boardDiv = document.getElementById("board");
+
+function startTimer(){
+
+    if(timerStarted) return;
+
+    timerStarted = true;
+
+    interval = setInterval(()=>{
+        timer++;
+        document.getElementById("timer").innerText =
+        "⏱ " + timer + "초";
+    },1000);
+}
+
+function loadBest(){
+
+    let best = localStorage.getItem("bestTime");
+
+    if(best){
+        document.getElementById("best").innerText =
+        "🏆 최고 기록: " + best + "초";
+    }
+}
+
+function saveBest(){
+
+    let best = localStorage.getItem("bestTime");
+
+    if(!best || timer < best){
+
+        localStorage.setItem("bestTime", timer);
+
+        document.getElementById("best").innerText =
+        "🏆 최고 기록: " + timer + "초";
+    }
+}
+
+function resetRecord(){
+
+    localStorage.removeItem("bestTime");
+
+    document.getElementById("best").innerText =
+    "🏆 최고 기록: 없음";
+}
+
+function createBoard(){
+
+    board = [];
+    boardDiv.innerHTML = "";
+
+    for(let r=0;r<ROWS;r++){
+
+        board[r]=[];
+
+        for(let c=0;c<COLS;c++){
+
+            board[r][c]={
+                mine:false,
+                open:false,
+                flag:false,
+                count:0
+            };
+        }
+    }
+
+    let placed=0;
+
+    while(placed<MINES){
+
+        let r=Math.floor(Math.random()*ROWS);
+        let c=Math.floor(Math.random()*COLS);
+
+        if(!board[r][c].mine){
+
+            board[r][c].mine=true;
+            placed++;
+        }
+    }
+
+    for(let r=0;r<ROWS;r++){
+
+        for(let c=0;c<COLS;c++){
+
+            if(board[r][c].mine) continue;
+
+            let count=0;
+
+            for(let dr=-1;dr<=1;dr++){
+
+                for(let dc=-1;dc<=1;dc++){
+
+                    let nr=r+dr;
+                    let nc=c+dc;
+
+                    if(
+                        nr>=0 &&
+                        nr<ROWS &&
+                        nc>=0 &&
+                        nc<COLS &&
+                        board[nr][nc].mine
+                    ){
+                        count++;
+                    }
+                }
+            }
+
+            board[r][c].count=count;
+        }
+    }
+
+    draw();
+}
+
+function draw(){
+
+    boardDiv.innerHTML="";
+
+    for(let r=0;r<ROWS;r++){
+
+        for(let c=0;c<COLS;c++){
+
+            const cell=document.createElement("div");
+
+            cell.className="cell";
+
+            let d=board[r][c];
+
+            if(d.open){
+
+                cell.classList.add("open");
+
+                if(d.mine){
+                    cell.innerText="💣";
+                }
+                else if(d.count>0){
+                    cell.innerText=d.count;
+                }
+            }
+
+            if(d.flag && !d.open){
+                cell.innerText="🚩";
+            }
+
+            cell.onclick=()=>openCell(r,c);
+
+            cell.oncontextmenu=(e)=>{
+                e.preventDefault();
+
+                if(!d.open){
+                    d.flag=!d.flag;
+                    draw();
+                }
+            };
+
+            boardDiv.appendChild(cell);
+        }
+    }
+}
+
+function openCell(r,c){
+
+    if(gameOver) return;
+
+    startTimer();
+
+    let d=board[r][c];
+
+    if(d.open || d.flag) return;
+
+    d.open=true;
+
+    if(d.mine){
+
+        clearInterval(interval);
+
+        gameOver=true;
+
+        alert("💥 게임 오버");
+
+        revealAll();
+
+        return;
+    }
+
+    if(d.count===0){
+
+        for(let dr=-1;dr<=1;dr++){
+
+            for(let dc=-1;dc<=1;dc++){
+
+                let nr=r+dr;
+                let nc=c+dc;
+
+                if(
+                    nr>=0 &&
+                    nr<ROWS &&
+                    nc>=0 &&
+                    nc<COLS
+                ){
+                    if(!board[nr][nc].open){
+                        openCell(nr,nc);
+                    }
+                }
+            }
+        }
+    }
+
+    checkWin();
+    draw();
+}
+
+function revealAll(){
+
+    for(let r=0;r<ROWS;r++){
+
+        for(let c=0;c<COLS;c++){
+
+            board[r][c].open=true;
+        }
+    }
+
+    draw();
+}
+
+function checkWin(){
+
+    let opened=0;
+
+    for(let r=0;r<ROWS;r++){
+
+        for(let c=0;c<COLS;c++){
+
+            if(
+                board[r][c].open &&
+                !board[r][c].mine
+            ){
+                opened++;
+            }
+        }
+    }
+
+    if(opened===ROWS*COLS-MINES){
+
+        clearInterval(interval);
+
+        gameOver=true;
+
+        saveBest();
+
+        alert("🏆 승리! " + timer + "초");
+    }
+}
+
+loadBest();
+createBoard();
+
+</script>
+
+</body>
+</html>
